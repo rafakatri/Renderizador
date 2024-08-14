@@ -58,7 +58,7 @@ class GL:
             ind = i * 2
             x, y = floor(point[ind]), floor(point[ind + 1])
             if not(x < 0 or y < 0 or x > GL.width or y > GL.height):
-                gpu.GPU.draw_pixel([floor(point[ind]) , floor(point[ind + 1])], gpu.GPU.RGB8, color) 
+                gpu.GPU.draw_pixel([int(point[ind]) , int(point[ind + 1])], gpu.GPU.RGB8, color) 
 
         # Exemplo:
         #pos_x = GL.width//2
@@ -82,14 +82,14 @@ class GL:
         #print("Polyline2D : lineSegments = {0}".format(lineSegments)) # imprime no terminal
         #print("Polyline2D : colors = {0}".format(colors)) # imprime no terminal as cores
         
-        n = len(lineSegments)//4
+        n = len(lineSegments)//2
 
         COLOR_TYPE = "emissiveColor"
 
         color = [int(el * 255) for el in colors[COLOR_TYPE]]
 
-        for i in range(n):
-            ind = i * 4
+        for i in range(n - 1):
+            ind = i * 2
             u1, v1, u2, v2 = lineSegments[ind:ind+4]
 
             delta_v = v2 - v1
@@ -108,8 +108,8 @@ class GL:
                 v = v1
                                
                 while (u <= u2):
-                    if not(u > GL.width or u < 0 or v > GL.height or v < 0):
-                        gpu.GPU.draw_pixel([int(u) , round(v)], gpu.GPU.RGB8, color)
+                    if not(u >= GL.width or u <= 0 or v >= GL.height or v <= 0):
+                        gpu.GPU.draw_pixel([int(u) , int(v)], gpu.GPU.RGB8, color)
                     v += s
                     u += 1
 
@@ -121,7 +121,8 @@ class GL:
                 u = u1
                 
                 while (v <= v2):
-                    gpu.GPU.draw_pixel([round(u) , int(v)], gpu.GPU.RGB8, color)
+                    if not(u >= GL.width or u <= 0 or v >= GL.height or v <= 0):
+                        gpu.GPU.draw_pixel([int(u) , int(v)], gpu.GPU.RGB8, color)
                     u += 1/s
                     v += 1
 
@@ -153,11 +154,35 @@ class GL:
         # quantidade de pontos é sempre multiplo de 3, ou seja, 6 valores ou 12 valores, etc.
         # O parâmetro colors é um dicionário com os tipos cores possíveis, para o TriangleSet2D
         # você pode assumir inicialmente o desenho das linhas com a cor emissiva (emissiveColor).
-        print("TriangleSet2D : vertices = {0}".format(vertices)) # imprime no terminal
-        print("TriangleSet2D : colors = {0}".format(colors)) # imprime no terminal as cores
+        #print("TriangleSet2D : vertices = {0}".format(vertices)) # imprime no terminal
+        #print("TriangleSet2D : colors = {0}".format(colors)) # imprime no terminal as cores
 
-        # Exemplo:
-        gpu.GPU.draw_pixel([6, 8], gpu.GPU.RGB8, [255, 255, 0])  # altera pixel (u, v, tipo, r, g, b)
+        n = len(vertices)//6
+
+        COLOR_TYPE = "emissiveColor"
+
+        color = [int(el * 255) for el in colors[COLOR_TYPE]]
+
+        for num in range(n):
+            ind = num * 6
+            a_u, a_v, b_u, b_v, c_u, c_v = vertices[ind:ind+6]
+
+            min_x = min([a_u, b_u, c_u])
+            max_x = max([a_u, b_u, c_u])
+            min_y = min([a_v, b_v, c_v])
+            max_y = max([a_v, b_v, c_v])
+
+            for j in range(int(min_y), int(max_y+1)):
+                for i in range(int(min_x), int(max_x+1)):
+                    l1 = (b_v - a_v) * i - (b_u - a_u) * j + a_v * (b_u - a_u) - a_u * (b_v - a_v)
+                    l2 = (c_v - b_v) * i - (c_u - b_u) * j + b_v * (c_u - b_u) - b_u * (c_v - b_v)
+                    l3 = (a_v - c_v) * i - (a_u - c_u) * j + c_v * (a_u - c_u) - c_u * (a_v - c_v)
+
+                    if all([l1 > 0, l2 > 0, l3 > 0]):
+                        if not(i >= GL.width or i <= 0 or j >= GL.height or j <= 0):
+                            gpu.GPU.draw_pixel([i , j], gpu.GPU.RGB8, color)
+
+
 
 
     @staticmethod
