@@ -15,6 +15,7 @@ import time         # Para operações com tempo
 import gpu          # Simula os recursos de uma GPU
 import math         # Funções matemáticas
 import numpy as np  # Biblioteca do Numpy
+from math import floor
 
 class GL:
     """Classe que representa a biblioteca gráfica (Graphics Library)."""
@@ -44,13 +45,25 @@ class GL:
         # você pode assumir inicialmente o desenho dos pontos com a cor emissiva (emissiveColor).
 
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("Polypoint2D : pontos = {0}".format(point)) # imprime no terminal pontos
-        print("Polypoint2D : colors = {0}".format(colors)) # imprime no terminal as cores
+        #print("Polypoint2D : pontos = {0}".format(point)) # imprime no terminal pontos
+        #print("Polypoint2D : colors = {0}".format(colors)) # imprime no terminal as cores
+
+        n = len(point)//2
+
+        COLOR_TYPE = "emissiveColor"
+
+        color = [int(el * 255) for el in colors[COLOR_TYPE]]
+
+        for i in range(n):
+            ind = i * 2
+            x, y = floor(point[ind]), floor(point[ind + 1])
+            if not(x < 0 or y < 0 or x > GL.width or y > GL.height):
+                gpu.GPU.draw_pixel([floor(point[ind]) , floor(point[ind + 1])], gpu.GPU.RGB8, color) 
 
         # Exemplo:
-        pos_x = GL.width//2
-        pos_y = GL.height//2
-        gpu.GPU.draw_pixel([pos_x, pos_y], gpu.GPU.RGB8, [255, 0, 0])  # altera pixel (u, v, tipo, r, g, b)
+        #pos_x = GL.width//2
+        #pos_y = GL.height//2
+        #gpu.GPU.draw_pixel([pos_x, pos_y], gpu.GPU.RGB8, [255, 0, 0])  # altera pixel (u, v, tipo, r, g, b)
         # cuidado com as cores, o X3D especifica de (0,1) e o Framebuffer de (0,255)
         
     @staticmethod
@@ -66,14 +79,51 @@ class GL:
         # O parâmetro colors é um dicionário com os tipos cores possíveis, para o Polyline2D
         # você pode assumir inicialmente o desenho das linhas com a cor emissiva (emissiveColor).
 
-        print("Polyline2D : lineSegments = {0}".format(lineSegments)) # imprime no terminal
-        print("Polyline2D : colors = {0}".format(colors)) # imprime no terminal as cores
+        #print("Polyline2D : lineSegments = {0}".format(lineSegments)) # imprime no terminal
+        #print("Polyline2D : colors = {0}".format(colors)) # imprime no terminal as cores
         
-        # Exemplo:
-        pos_x = GL.width//2
-        pos_y = GL.height//2
-        gpu.GPU.draw_pixel([pos_x, pos_y], gpu.GPU.RGB8, [255, 0, 255])  # altera pixel (u, v, tipo, r, g, b)
-        # cuidado com as cores, o X3D especifica de (0,1) e o Framebuffer de (0,255)
+        n = len(lineSegments)//4
+
+        COLOR_TYPE = "emissiveColor"
+
+        color = [int(el * 255) for el in colors[COLOR_TYPE]]
+
+        for i in range(n):
+            ind = i * 4
+            u1, v1, u2, v2 = lineSegments[ind:ind+4]
+
+            delta_v = v2 - v1
+            delta_u = u2 - u1
+
+            if delta_u != 0:
+                s = delta_v/delta_u
+            else:
+                s = math.inf
+            
+            if abs(s) < 1:
+                if u2 < u1:
+                    u1, v1, u2, v2 = u2, v2, u1, v1
+
+                u = u1 
+                v = v1
+                               
+                while (u <= u2):
+                    if not(u > GL.width or u < 0 or v > GL.height or v < 0):
+                        gpu.GPU.draw_pixel([int(u) , round(v)], gpu.GPU.RGB8, color)
+                    v += s
+                    u += 1
+
+            else:
+                if v2 < v1:
+                    u1, v1, u2, v2 = u2, v2, u1, v1
+
+                v = v1
+                u = u1
+                
+                while (v <= v2):
+                    gpu.GPU.draw_pixel([round(u) , int(v)], gpu.GPU.RGB8, color)
+                    u += 1/s
+                    v += 1
 
     @staticmethod
     def circle2D(radius, colors):
