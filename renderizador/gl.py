@@ -25,7 +25,7 @@ class GL:
     near = 0.01   # plano de corte próximo
     far = 1000    # plano de corte distante
 
-    tf_stack = []
+    tf_stack = [np.identity(4)]
     perspective_matrix = []
     screen_matrix = []
     visualization_matrix = []
@@ -339,7 +339,7 @@ class GL:
               [0, 0, 0, 1]
              ])
         #print("")
-        GL.tf_stack.append(np.matmul(np.matmul(t, r), s))
+        GL.tf_stack.append(GL.tf_stack[-1] @ t @ r @ s)
         GL.transform_matrix = GL.tf_stack[-1]
 
     @staticmethod
@@ -376,8 +376,26 @@ class GL:
         print("")
         print("TriangleStripSet : colors = {0}".format(colors)) # imprime no terminal as cores
 
-        # Exemplo de desenho de um pixel branco na coordenada 10, 10
-        gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
+        points = []
+
+        print(point)
+
+        for el in stripCount:
+            for i in range(el-2):
+                idx0 = i * 3
+                idx1 = (i+1) * 3
+                idx2 = (i+2) * 3
+
+                if i %2 == 0:
+                    points.extend(point[idx0:idx0+3])
+                    points.extend(point[idx1:idx1+3])
+                    points.extend(point[idx2:idx2+3])
+                else:
+                    points.extend(point[idx0:idx0+3])
+                    points.extend(point[idx2:idx2+3])
+                    points.extend(point[idx1:idx1+3])
+                    
+            GL.triangleSet(points, colors)
 
     @staticmethod
     def indexedTriangleStripSet(point, index, colors):
@@ -399,8 +417,27 @@ class GL:
         print("IndexedTriangleStripSet : pontos = {0}, index = {1}".format(point, index))
         print("IndexedTriangleStripSet : colors = {0}".format(colors)) # imprime as cores
 
-        # Exemplo de desenho de um pixel branco na coordenada 10, 10
-        gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
+        point_list = []
+        for i in range(len(index) - 2):
+            
+            idx0 = index[i] * 3
+            idx1 = index[i + 1] * 3
+            idx2 = index[i + 2] * 3
+
+            if (idx2 < 0):
+                GL.triangleSet(point_list, colors)
+                point_list = []
+                continue
+            
+            if i %2 == 0:
+                point_list.extend(point[idx0:idx0+3])
+                point_list.extend(point[idx1:idx1+3])
+                point_list.extend(point[idx2:idx2+3])
+            else:
+                point_list.extend(point[idx0:idx0+3])
+                point_list.extend(point[idx2:idx2+3])
+                point_list.extend(point[idx1:idx1+3])
+
 
     @staticmethod
     def indexedFaceSet(coord, coordIndex, colorPerVertex, color, colorIndex,
