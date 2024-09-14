@@ -370,21 +370,20 @@ class GL:
         # todos no sentido horário ou todos no sentido anti-horário, conforme especificado.
 
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("TriangleStripSet : pontos = {0} ".format(point), end='')
-        for i, strip in enumerate(stripCount):
-            print("strip[{0}] = {1} ".format(i, strip), end='')
-        print("")
-        print("TriangleStripSet : colors = {0}".format(colors)) # imprime no terminal as cores
+        #print("TriangleStripSet : pontos = {0} ".format(point), end='')
+        #for i, strip in enumerate(stripCount):
+        #    print("strip[{0}] = {1} ".format(i, strip), end='')
+        #print("")
+        #print("TriangleStripSet : colors = {0}".format(colors)) # imprime no terminal as cores
 
         points = []
-
-        print(point)
+        ind = 0
 
         for el in stripCount:
             for i in range(el-2):
-                idx0 = i * 3
-                idx1 = (i+1) * 3
-                idx2 = (i+2) * 3
+                idx0 = ind * 3
+                idx1 = (ind+1) * 3
+                idx2 = (ind+2) * 3
 
                 if i %2 == 0:
                     points.extend(point[idx0:idx0+3])
@@ -394,8 +393,10 @@ class GL:
                     points.extend(point[idx0:idx0+3])
                     points.extend(point[idx2:idx2+3])
                     points.extend(point[idx1:idx1+3])
-                    
+                ind += 1
             GL.triangleSet(points, colors)
+            points = []
+            ind += 2
 
     @staticmethod
     def indexedTriangleStripSet(point, index, colors):
@@ -414,29 +415,35 @@ class GL:
         # todos no sentido horário ou todos no sentido anti-horário, conforme especificado.
 
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("IndexedTriangleStripSet : pontos = {0}, index = {1}".format(point, index))
-        print("IndexedTriangleStripSet : colors = {0}".format(colors)) # imprime as cores
+        #print("IndexedTriangleStripSet : pontos = {0}, index = {1}".format(point, index))
+        #print("IndexedTriangleStripSet : colors = {0}".format(colors)) # imprime as cores
 
         point_list = []
-        for i in range(len(index) - 2):
+        index_list = []
+        for i in range(len(index)):
             
-            idx0 = index[i] * 3
-            idx1 = index[i + 1] * 3
-            idx2 = index[i + 2] * 3
+            if (index[i] == -1):
+                for j in range(len(index_list) - 2):
+                    idx0 = index_list[j] * 3
+                    idx1 = index_list[j+1] * 3
+                    idx2 = index_list[j+2] * 3
 
-            if (idx2 < 0):
-                GL.triangleSet(point_list, colors)
-                point_list = []
-                continue
-            
-            if i %2 == 0:
-                point_list.extend(point[idx0:idx0+3])
-                point_list.extend(point[idx1:idx1+3])
-                point_list.extend(point[idx2:idx2+3])
+                    if j % 2 == 0:
+                        point_list.extend(point[idx0:idx0+3])
+                        point_list.extend(point[idx1:idx1+3])
+                        point_list.extend(point[idx2:idx2+3])
+                    else:
+                        point_list.extend(point[idx0:idx0+3])
+                        point_list.extend(point[idx2:idx2+3])
+                        point_list.extend(point[idx1:idx1+3])
+
+                    GL.triangleSet(point_list, colors)
+                    point_list = []
+
+                index_list = []
+
             else:
-                point_list.extend(point[idx0:idx0+3])
-                point_list.extend(point[idx2:idx2+3])
-                point_list.extend(point[idx1:idx1+3])
+                index_list.append(index[i])
 
 
     @staticmethod
@@ -464,22 +471,43 @@ class GL:
         # implementadado um método para a leitura de imagens.
 
         # Os prints abaixo são só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("IndexedFaceSet : ")
-        if coord:
-            print("\tpontos(x, y, z) = {0}, coordIndex = {1}".format(coord, coordIndex))
-        print("colorPerVertex = {0}".format(colorPerVertex))
-        if colorPerVertex and color and colorIndex:
-            print("\tcores(r, g, b) = {0}, colorIndex = {1}".format(color, colorIndex))
-        if texCoord and texCoordIndex:
-            print("\tpontos(u, v) = {0}, texCoordIndex = {1}".format(texCoord, texCoordIndex))
-        if current_texture:
-            image = gpu.GPU.load_texture(current_texture[0])
-            print("\t Matriz com image = {0}".format(image))
-            print("\t Dimensões da image = {0}".format(image.shape))
-        print("IndexedFaceSet : colors = {0}".format(colors))  # imprime no terminal as cores
+        #print("IndexedFaceSet : ")
+        #if coord:
+        #    print("\tpontos(x, y, z) = {0}, coordIndex = {1}".format(coord, coordIndex))
+        #print("colorPerVertex = {0}".format(colorPerVertex))
+        #if colorPerVertex and color and colorIndex:
+        #    print("\tcores(r, g, b) = {0}, colorIndex = {1}".format(color, colorIndex))
+        #if texCoord and texCoordIndex:
+        #    print("\tpontos(u, v) = {0}, texCoordIndex = {1}".format(texCoord, texCoordIndex))
+        #if current_texture:
+        #    image = gpu.GPU.load_texture(current_texture[0])
+        #    print("\t Matriz com image = {0}".format(image))
+        #    print("\t Dimensões da image = {0}".format(image.shape))
+        #print("IndexedFaceSet : colors = {0}".format(colors))  # imprime no terminal as cores
+        
+        point_list = []
+        index_list = []
+        for i in range(len(coordIndex)):
+            
+            if (coordIndex[i] == -1):
+                for j in range(1, len(index_list) - 1):
+                    idx0 = index_list[0] * 3
+                    idx1 = index_list[j] * 3
+                    idx2 = index_list[j+1] * 3
 
-        # Exemplo de desenho de um pixel branco na coordenada 10, 10
-        gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
+                    point_list.extend(coord[idx0:idx0+3])
+                    point_list.extend(coord[idx1:idx1+3])
+                    point_list.extend(coord[idx2:idx2+3])
+
+                    GL.triangleSet(point_list, colors)
+                    point_list = []
+
+                index_list = []
+
+            else:
+                index_list.append(coordIndex[i])
+
+            
 
     @staticmethod
     def box(size, colors):
