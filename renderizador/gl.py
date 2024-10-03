@@ -234,9 +234,15 @@ class GL:
                                 y = int(v * image.shape[1])
                                 color = image[x][y][0:3]
                             
+                            # z-buffer and transparency
                             if z_value > GL.z_buffer[i, j]:
                                 GL.z_buffer[i, j] = z_value
-                                gpu.GPU.draw_pixel([i, j], gpu.GPU.RGB8, color)
+                                color_final = []
+                                for index in range(3):
+                                    cor_anterior = gpu.GPU.read_pixel([i, j], gpu.GPU.RGB8)[index] * colors["transparency"]
+                                    cor_nova = color[index] * (1 - colors["transparency"])
+                                    color_final.append(int(cor_anterior + cor_nova))
+                                gpu.GPU.draw_pixel([i, j], gpu.GPU.RGB8, color_final)
                             else:
                                 pass
 
