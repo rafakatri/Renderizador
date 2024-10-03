@@ -38,7 +38,9 @@ class GL:
         GL.height = height
         GL.near = near
         GL.far = far
-        
+
+        GL.z_buffer = -np.inf * np.ones((GL.width, GL.height))
+
     @staticmethod
     def polypoint2D(point, colors):
         """Função usada para renderizar Polypoint2D."""
@@ -232,9 +234,9 @@ class GL:
                                 y = int(v * image.shape[1])
                                 color = image[x][y][0:3]
                             
-                            if z_value < gpu.GPU.read_pixel([i,j], gpu.GPU.DEPTH_COMPONENT32F):
-                                gpu.GPU.draw_pixel([i, j], gpu.GPU.DEPTH_COMPONENT32F, z_value)
-                                gpu.GPU.draw_pixel([i , j], gpu.GPU.RGB8, color)
+                            if z_value > GL.z_buffer[i, j]:
+                                GL.z_buffer[i, j] = z_value
+                                gpu.GPU.draw_pixel([i, j], gpu.GPU.RGB8, color)
                             else:
                                 pass
 
