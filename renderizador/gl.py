@@ -38,7 +38,7 @@ class GL:
         GL.height = height
         GL.near = near
         GL.far = far
-
+        
     @staticmethod
     def polypoint2D(point, colors):
         """Função usada para renderizar Polypoint2D."""
@@ -154,7 +154,7 @@ class GL:
 
 
     @staticmethod
-    def triangleSet2D(vertices, colors):
+    def triangleSet2D(vertices, colors, z=[1,1,1], colorPerVertex=False, textCoord=False, currentTexture=False):
         """Função usada para renderizar TriangleSet2D."""
         # https://www.web3d.org/specifications/X3Dv4/ISO-IEC19775-1v4-IS/Part01/components/geometry2D.html#TriangleSet2D
         # Nessa função você receberá os vertices de um triângulo no parâmetro vertices,
@@ -175,8 +175,16 @@ class GL:
 
         for num in range(n):
             ind = num * 6
+            ind_cor = num * 9
             a_u, a_v, b_u, b_v, c_u, c_v = vertices[ind:ind+6]
+            
+            if colorPerVertex:
+                a_r, a_g, a_b, b_r, b_g, b_b, c_r, c_g, c_b = colorPerVertex[ind_cor:ind_cor+9]
 
+            if textCoord:
+                u_t0, v_t0, u_t1, v_t1, u_t2, v_t2 = textCoord[ind: ind+6]
+
+            #bounding box
             min_x = min([a_u, b_u, c_u])
             max_x = max([a_u, b_u, c_u])
             min_y = min([a_v, b_v, c_v])
@@ -184,19 +192,55 @@ class GL:
 
             for j in range(int(min_y), int(max_y+1)):
                 for i in range(int(min_x), int(max_x+1)):
-                    l1 = (b_v - a_v) * i - (b_u - a_u) * j + a_v * (b_u - a_u) - a_u * (b_v - a_v)
-                    l2 = (c_v - b_v) * i - (c_u - b_u) * j + b_v * (c_u - b_u) - b_u * (c_v - b_v)
-                    l3 = (a_v - c_v) * i - (a_u - c_u) * j + c_v * (a_u - c_u) - c_u * (a_v - c_v)
+                    i_center = i + 0.5
+                    j_center = j + 0.5 
+
+                    #check if is inside triangle
+                    l1 = (b_v - a_v) * i_center - (b_u - a_u) * j_center + a_v * (b_u - a_u) - a_u * (b_v - a_v)
+                    l2 = (c_v - b_v) * i_center - (c_u - b_u) * j_center + b_v * (c_u - b_u) - b_u * (c_v - b_v)
+                    l3 = (a_v - c_v) * i_center - (a_u - c_u) * j_center + c_v * (a_u - c_u) - c_u * (a_v - c_v)
 
                     if all([l1 > 0, l2 > 0, l3 > 0]):
                         if not(i >= GL.width or i <= 0 or j >= GL.height or j <= 0):
-                            gpu.GPU.draw_pixel([i , j], gpu.GPU.RGB8, color)
+                            #barycentric coordinates
+                            total_area = abs(a_u * (b_v - c_v) + b_u * (c_v - a_v) + c_u * (a_v - b_v))/2
 
+                            a0 = abs(i_center * (b_v - c_v) + b_u * (c_v - j_center) + c_u * (j_center - b_v))/2
+                            a1 = abs(i_center * (c_v - a_v) + c_u * (a_v - j_center) + a_u * (j_center - c_v))/2
 
+                            alfa = a0/total_area
+                            beta = a1/total_area
+                            gama = 1 - alfa - beta
+                            
+                            z_value = 1/(alfa * (1/z[0]) + beta * (1/z[1]) + gama * (1/z[2]))
+
+                            if colorPerVertex:
+
+                                r = z_value * ((alfa * a_r/z[0]) + (beta * b_r/z[1]) + (gama * c_r/z[2]))
+                                g = z_value * ((alfa * a_g/z[0]) + (beta * b_g/z[1]) + (gama * c_g/z[2]))
+                                b = z_value * ((alfa * a_b/z[0]) + (beta * b_b/z[1]) + (gama * c_b/z[2]))
+
+                                color = [int(el * 255) for el in [r,g,b]]
+
+                            elif textCoord:
+                                u = z_value * ((alfa * u_t0/z[0]) + (beta * u_t1/z[1]) + (gama * u_t2/z[2]))
+                                v = z_value * ((alfa * v_t0/z[0]) + (beta * v_t1/z[1]) + (gama * v_t2/z[2]))
+
+                                image = gpu.GPU.load_texture(currentTexture[0])
+                                image = np.flip(image[:, :, :3], axis=1)
+                                x = int(u * image.shape[0])
+                                y = int(v * image.shape[1])
+                                color = image[x][y][0:3]
+                            
+                            if z_value < gpu.GPU.read_pixel([i,j], gpu.GPU.DEPTH_COMPONENT32F):
+                                gpu.GPU.draw_pixel([i, j], gpu.GPU.DEPTH_COMPONENT32F, z_value)
+                                gpu.GPU.draw_pixel([i , j], gpu.GPU.RGB8, color)
+                            else:
+                                pass
 
 
     @staticmethod
-    def triangleSet(point, colors):
+    def triangleSet(point, colors, colorPerVertex=False, textCoord=False, currentTexture = False):
         """Função usada para renderizar TriangleSet."""
         # https://www.web3d.org/specifications/X3Dv4/ISO-IEC19775-1v4-IS/Part01/components/rendering.html#TriangleSet
         # Nessa função você receberá pontos no parâmetro point, esses pontos são uma lista
@@ -222,27 +266,35 @@ class GL:
             ind = num * 9
             a_u, a_v, a_w, b_u, b_v, b_w, c_u, c_v, c_w = point[ind:ind+9]
 
+            #apply tf matrix to vertex
             tf_a = np.matmul(GL.transform_matrix, np.array([[a_u], [a_v], [a_w], [1]]))
             tf_b = np.matmul(GL.transform_matrix, np.array([[b_u], [b_v], [b_w], [1]]))
             tf_c = np.matmul(GL.transform_matrix, np.array([[c_u], [c_v], [c_w], [1]]))
-
+            
+            #camera space
             camera_space_a = np.matmul(GL.visualization_matrix, tf_a)
             camera_space_b = np.matmul(GL.visualization_matrix, tf_b)
             camera_space_c = np.matmul(GL.visualization_matrix, tf_c)
 
+            #apply perspective
             perspective_a = np.matmul(GL.perspective_matrix, camera_space_a)
             perspective_b = np.matmul(GL.perspective_matrix, camera_space_b)
             perspective_c = np.matmul(GL.perspective_matrix, camera_space_c)
 
+            #normalize
             ndc_a = perspective_a/perspective_a[3]
             ndc_b = perspective_b/perspective_b[3]
             ndc_c = perspective_c/perspective_c[3]
 
+            #screen space
             screen_a = np.matmul(GL.screen_matrix, ndc_a)
             screen_b = np.matmul(GL.screen_matrix, ndc_b)
             screen_c = np.matmul(GL.screen_matrix, ndc_c)
 
-            GL.triangleSet2D([screen_a[0][0], screen_a[1][0], screen_b[0][0], screen_b[1][0], screen_c[0][0], screen_c[1][0]], colors)
+            #z-values on camera space
+            z = [camera_space_a[2], camera_space_b[2], camera_space_c[2]]
+
+            GL.triangleSet2D([screen_a[0][0], screen_a[1][0], screen_b[0][0], screen_b[1][0], screen_c[0][0], screen_c[1][0]], colors, z, colorPerVertex, textCoord, currentTexture)
 
 
     @staticmethod
@@ -459,10 +511,9 @@ class GL:
         # o valor z da coordenada z do primeiro ponto. Já coord[3] é a coordenada x do
         # segundo ponto e assim por diante. No IndexedFaceSet uma lista de vértices é informada
         # em coordIndex, o valor -1 indica que a lista acabou.
-        # A ordem de conexão não possui uma ordem oficial, mas em geral se o primeiro ponto com os dois
-        # seguintes e depois este mesmo primeiro ponto com o terçeiro e quarto ponto. Por exemplo: numa
-        # sequencia 0, 1, 2, 3, 4, -1 o primeiro triângulo será com os vértices 0, 1 e 2, depois serão
-        # os vértices 0, 2 e 3, e depois 0, 3 e 4, e assim por diante, até chegar no final da lista.
+        # A ordem de conexão será de 3 em 3 pulando um índice. Por exemplo: o
+        # primeiro triângulo será com os vértices 0, 1 e 2, depois serão os vértices 1, 2 e 3,
+        # depois 2, 3 e 4, e assim por diante.
         # Adicionalmente essa implementação do IndexedFace aceita cores por vértices, assim
         # se a flag colorPerVertex estiver habilitada, os vértices também possuirão cores
         # que servem para definir a cor interna dos poligonos, para isso faça um cálculo
@@ -474,7 +525,7 @@ class GL:
         # Os prints abaixo são só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
         #print("IndexedFaceSet : ")
         #if coord:
-        #    print("\tpontos(x, y, z) = {0}, coordIndex = {1}".format(coord, coordIndex))
+            #print("\tpontos(x, y, z) = {0}, coordIndex = {1}".format(coord, coordIndex))
         #print("colorPerVertex = {0}".format(colorPerVertex))
         #if colorPerVertex and color and colorIndex:
         #    print("\tcores(r, g, b) = {0}, colorIndex = {1}".format(color, colorIndex))
@@ -485,8 +536,9 @@ class GL:
         #    print("\t Matriz com image = {0}".format(image))
         #    print("\t Dimensões da image = {0}".format(image.shape))
         #print("IndexedFaceSet : colors = {0}".format(colors))  # imprime no terminal as cores
-        
         point_list = []
+        color_list = []
+        text_list = []
         index_list = []
         for i in range(len(coordIndex)):
             
@@ -500,8 +552,28 @@ class GL:
                     point_list.extend(coord[idx1:idx1+3])
                     point_list.extend(coord[idx2:idx2+3])
 
-                    GL.triangleSet(point_list, colors)
+                    if color is not None:
+                        color_list.extend(color[idx0:idx0+3])
+                        color_list.extend(color[idx1:idx1+3])
+                        color_list.extend(color[idx2:idx2+3])
+                        GL.triangleSet(point_list, colors, colorPerVertex=color_list)
+
+                    elif texCoord is not None:
+                        id_txt0 = index_list[0] * 2
+                        id_txt1 = index_list[j] * 2
+                        id_txt2 = index_list[j+1] * 2
+
+                        text_list.extend(texCoord[id_txt0:id_txt0+2])
+                        text_list.extend(texCoord[id_txt1:id_txt1+2])
+                        text_list.extend(texCoord[id_txt2:id_txt2+2])
+                        GL.triangleSet(point_list, colors, textCoord=text_list, currentTexture=current_texture)
+
+                    else:
+                        GL.triangleSet(point_list, colors)
+
                     point_list = []
+                    color_list = []
+                    text_list = []
 
                 index_list = []
 
@@ -541,38 +613,6 @@ class GL:
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
         print("Sphere : radius = {0}".format(radius)) # imprime no terminal o raio da esfera
         print("Sphere : colors = {0}".format(colors)) # imprime no terminal as cores
-
-    @staticmethod
-    def cone(bottomRadius, height, colors):
-        """Função usada para renderizar Cones."""
-        # https://www.web3d.org/specifications/X3Dv4/ISO-IEC19775-1v4-IS/Part01/components/geometry3D.html#Cone
-        # A função cone é usada para desenhar cones na cena. O cone é centrado no
-        # (0, 0, 0) no sistema de coordenadas local. O argumento bottomRadius especifica o
-        # raio da base do cone e o argumento height especifica a altura do cone.
-        # O cone é alinhado com o eixo Y local. O cone é fechado por padrão na base.
-        # Para desenha esse cone você vai precisar tesselar ele em triângulos, para isso
-        # encontre os vértices e defina os triângulos.
-
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("Cone : bottomRadius = {0}".format(bottomRadius)) # imprime no terminal o raio da base do cone
-        print("Cone : height = {0}".format(height)) # imprime no terminal a altura do cone
-        print("Cone : colors = {0}".format(colors)) # imprime no terminal as cores
-
-    @staticmethod
-    def cylinder(radius, height, colors):
-        """Função usada para renderizar Cilindros."""
-        # https://www.web3d.org/specifications/X3Dv4/ISO-IEC19775-1v4-IS/Part01/components/geometry3D.html#Cylinder
-        # A função cylinder é usada para desenhar cilindros na cena. O cilindro é centrado no
-        # (0, 0, 0) no sistema de coordenadas local. O argumento radius especifica o
-        # raio da base do cilindro e o argumento height especifica a altura do cilindro.
-        # O cilindro é alinhado com o eixo Y local. O cilindro é fechado por padrão em ambas as extremidades.
-        # Para desenha esse cilindro você vai precisar tesselar ele em triângulos, para isso
-        # encontre os vértices e defina os triângulos.
-
-        # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("Cylinder : radius = {0}".format(radius)) # imprime no terminal o raio do cilindro
-        print("Cylinder : height = {0}".format(height)) # imprime no terminal a altura do cilindro
-        print("Cylinder : colors = {0}".format(colors)) # imprime no terminal as cores
 
     @staticmethod
     def navigationInfo(headlight):
