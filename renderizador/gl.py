@@ -169,6 +169,70 @@ class GL:
         #print("TriangleSet2D : vertices = {0}".format(vertices)) # imprime no terminal
         #print("TriangleSet2D : colors = {0}".format(colors)) # imprime no terminal as cores
 
+
+        def is_inside(pixel, vertex):
+            i_center, j_center = pixel
+            a_u, a_v, b_u, b_v, c_u, c_v = vertex
+
+            l1 = (b_v - a_v) * i_center - (b_u - a_u) * j_center + a_v * (b_u - a_u) - a_u * (b_v - a_v)
+            l2 = (c_v - b_v) * i_center - (c_u - b_u) * j_center + b_v * (c_u - b_u) - b_u * (c_v - b_v)
+            l3 = (a_v - c_v) * i_center - (a_u - c_u) * j_center + c_v * (a_u - c_u) - c_u * (a_v - c_v)
+
+            return all([l1 > 0, l2 > 0, l3 > 0])
+        
+        def barycentric_coordinates(pixel, vertex):
+            i_center, j_center = pixel
+            a_u, a_v, b_u, b_v, c_u, c_v = vertex
+
+            total_area = abs(a_u * (b_v - c_v) + b_u * (c_v - a_v) + c_u * (a_v - b_v))/2
+
+            a0 = abs(i_center * (b_v - c_v) + b_u * (c_v - j_center) + c_u * (j_center - b_v))/2
+            a1 = abs(i_center * (c_v - a_v) + c_u * (a_v - j_center) + a_u * (j_center - c_v))/2
+
+            alfa = a0/total_area
+            beta = a1/total_area
+            gama = 1 - alfa - beta                
+            z_value = 1/(alfa * (1/z[0]) + beta * (1/z[1]) + gama * (1/z[2]))
+
+            return (alfa, beta, gama , z_value)
+
+        def get_uv(pixel, vertex, texture):
+            u_t0, v_t0, u_t1, v_t1, u_t2, v_t2 = texture
+
+            alfa, beta, gama, z_value = barycentric_coordinates(pixel, vertex)
+            u = z_value * ((alfa * u_t0/z[0]) + (beta * u_t1/z[1]) + (gama * u_t2/z[2]))
+            v = z_value * ((alfa * v_t0/z[0]) + (beta * v_t1/z[1]) + (gama * v_t2/z[2]))
+            return (u,v)
+
+        def create_minimap(img):
+            minimap = [img]
+
+            temp_img = img
+            while temp_img.shape[0] > 1 and temp_img.shape[1] > 1:
+                h = max(1, temp_img.shape[0] // 2)
+                w = max(1, temp_img.shape[1] // 2)
+
+                downscaled_img = np.zeros((h, w, temp_img.shape[2]), dtype=temp_img.dtype)
+
+                for i in range(h):
+                    for j in range(w):
+                        segment = temp_img[2 * i:2 * i + 2, 2 * j:2 * j + 2]
+                        downscaled_img[i, j] = np.mean(segment, axis=(0, 1))
+
+                minimap.append(downscaled_img)
+                temp_img = downscaled_img
+
+            return minimap
+        
+
+        def get_minimap_level(dudx, dudy, dvdx, dvdy):
+            v1 = (dudx**2 + dvdx**2)**0.5
+            v2 = (dudx**2 + dvdx**2)**0.5
+
+            l = max(v1, v2)
+            return int(math.log2(l))
+
+
         n = len(vertices)//6
 
         COLOR_TYPE = "emissiveColor"
@@ -185,6 +249,10 @@ class GL:
 
             if textCoord:
                 u_t0, v_t0, u_t1, v_t1, u_t2, v_t2 = textCoord[ind: ind+6]
+                
+                image = gpu.GPU.load_texture(currentTexture[0])
+                image = np.flip(image[:, :, :3], axis=1)
+                minimaps = create_minimap(image)
 
             #bounding box
             min_x = min([a_u, b_u, c_u])
@@ -195,56 +263,52 @@ class GL:
             for j in range(int(min_y), int(max_y+1)):
                 for i in range(int(min_x), int(max_x+1)):
                     i_center = i + 0.5
-                    j_center = j + 0.5 
+                    j_center = j + 0.5
+                    pixel = (i_center, j_center)  
 
-                    #check if is inside triangle
-                    l1 = (b_v - a_v) * i_center - (b_u - a_u) * j_center + a_v * (b_u - a_u) - a_u * (b_v - a_v)
-                    l2 = (c_v - b_v) * i_center - (c_u - b_u) * j_center + b_v * (c_u - b_u) - b_u * (c_v - b_v)
-                    l3 = (a_v - c_v) * i_center - (a_u - c_u) * j_center + c_v * (a_u - c_u) - c_u * (a_v - c_v)
+                    if is_inside(pixel, vertices[ind:ind+6]) and not(i >= GL.width or i <= 0 or j >= GL.height or j <= 0):
+                        alfa, beta, gama, z_value = barycentric_coordinates(pixel, vertices[ind:ind+6])
 
-                    if all([l1 > 0, l2 > 0, l3 > 0]):
-                        if not(i >= GL.width or i <= 0 or j >= GL.height or j <= 0):
-                            #barycentric coordinates
-                            total_area = abs(a_u * (b_v - c_v) + b_u * (c_v - a_v) + c_u * (a_v - b_v))/2
+                        if colorPerVertex:
 
-                            a0 = abs(i_center * (b_v - c_v) + b_u * (c_v - j_center) + c_u * (j_center - b_v))/2
-                            a1 = abs(i_center * (c_v - a_v) + c_u * (a_v - j_center) + a_u * (j_center - c_v))/2
+                            r = z_value * ((alfa * a_r/z[0]) + (beta * b_r/z[1]) + (gama * c_r/z[2]))
+                            g = z_value * ((alfa * a_g/z[0]) + (beta * b_g/z[1]) + (gama * c_g/z[2]))
+                            b = z_value * ((alfa * a_b/z[0]) + (beta * b_b/z[1]) + (gama * c_b/z[2]))
 
-                            alfa = a0/total_area
-                            beta = a1/total_area
-                            gama = 1 - alfa - beta
-                            
-                            z_value = 1/(alfa * (1/z[0]) + beta * (1/z[1]) + gama * (1/z[2]))
+                            color = [int(el * 255) for el in [r,g,b]]
 
-                            if colorPerVertex:
+                        elif textCoord:
+                            u = z_value * ((alfa * u_t0/z[0]) + (beta * u_t1/z[1]) + (gama * u_t2/z[2]))
+                            v = z_value * ((alfa * v_t0/z[0]) + (beta * v_t1/z[1]) + (gama * v_t2/z[2]))
 
-                                r = z_value * ((alfa * a_r/z[0]) + (beta * b_r/z[1]) + (gama * c_r/z[2]))
-                                g = z_value * ((alfa * a_g/z[0]) + (beta * b_g/z[1]) + (gama * c_g/z[2]))
-                                b = z_value * ((alfa * a_b/z[0]) + (beta * b_b/z[1]) + (gama * c_b/z[2]))
+                            u_10, v_10 = get_uv((i_center + 1, j_center), vertices[ind:ind+6], textCoord[ind: ind+6])
+                            u_01, v_01 = get_uv((i_center, j_center + 1), vertices[ind:ind+6], textCoord[ind: ind+6])
 
-                                color = [int(el * 255) for el in [r,g,b]]
 
-                            elif textCoord:
-                                u = z_value * ((alfa * u_t0/z[0]) + (beta * u_t1/z[1]) + (gama * u_t2/z[2]))
-                                v = z_value * ((alfa * v_t0/z[0]) + (beta * v_t1/z[1]) + (gama * v_t2/z[2]))
+                            dudx = image.shape[0] * (u_10 - u)
+                            dudy = image.shape[0] * (u_01 - u)
 
-                                image = gpu.GPU.load_texture(currentTexture[0])
-                                image = np.flip(image[:, :, :3], axis=1)
-                                x = int(u * image.shape[0])
-                                y = int(v * image.shape[1])
-                                color = image[x][y][0:3]
-                            
-                            # z-buffer and transparency
-                            if z_value > GL.z_buffer[i, j]:
-                                GL.z_buffer[i, j] = z_value
-                                color_final = []
-                                for index in range(3):
-                                    cor_anterior = gpu.GPU.read_pixel([i, j], gpu.GPU.RGB8)[index] * colors["transparency"]
-                                    cor_nova = color[index] * (1 - colors["transparency"])
-                                    color_final.append(int(cor_anterior + cor_nova))
-                                gpu.GPU.draw_pixel([i, j], gpu.GPU.RGB8, color_final)
-                            else:
-                                pass
+                            dvdx = image.shape[0] * (v_10 - v)
+                            dvdy = image.shape[0] * (v_01 - v)
+
+                            d = get_minimap_level(dudx, dudy, dvdx, dvdy)
+                            minimap_level = minimaps[d]
+
+                            x = int(u * minimap_level.shape[0])
+                            y = int(v * minimap_level.shape[1])
+                            color = minimap_level[x][y][0:3]
+                        
+                        # z-buffer and transparency
+                        if z_value > GL.z_buffer[i, j]:
+                            GL.z_buffer[i, j] = z_value
+                            color_final = []
+                            for index in range(3):
+                                cor_anterior = gpu.GPU.read_pixel([i, j], gpu.GPU.RGB8)[index] * colors["transparency"]
+                                cor_nova = color[index] * (1 - colors["transparency"])
+                                color_final.append(int(cor_anterior + cor_nova))
+                            gpu.GPU.draw_pixel([i, j], gpu.GPU.RGB8, color_final)
+                        else:
+                            pass
 
 
     @staticmethod
