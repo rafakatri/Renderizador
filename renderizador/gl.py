@@ -227,7 +227,7 @@ class GL:
 
         def get_minimap_level(dudx, dudy, dvdx, dvdy):
             v1 = (dudx**2 + dvdx**2)**0.5
-            v2 = (dudx**2 + dvdx**2)**0.5
+            v2 = (dudy**2 + dvdy**2)**0.5
 
             l = max(v1, v2)
             return int(math.log2(l))
