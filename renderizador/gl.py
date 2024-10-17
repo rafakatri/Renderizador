@@ -387,7 +387,6 @@ class GL:
 
             #z-values on camera space
             z = [camera_space_a[2], camera_space_b[2], camera_space_c[2]]
-
             GL.triangleSet2D([screen_a[0][0], screen_a[1][0], screen_b[0][0], screen_b[1][0], screen_c[0][0], screen_c[1][0]], colors, z, colorPerVertex, textCoord, currentTexture)
 
 
@@ -563,7 +562,6 @@ class GL:
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
         #print("IndexedTriangleStripSet : pontos = {0}, index = {1}".format(point, index))
         #print("IndexedTriangleStripSet : colors = {0}".format(colors)) # imprime as cores
-
         point_list = []
         index_list = []
         for i in range(len(index)):
@@ -688,11 +686,39 @@ class GL:
         # encontre os vértices e defina os triângulos.
 
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
-        print("Box : size = {0}".format(size)) # imprime no terminal pontos
-        print("Box : colors = {0}".format(colors)) # imprime no terminal as cores
+        #print("Box : size = {0}".format(size)) # imprime no terminal pontos
+        #print("Box : colors = {0}".format(colors)) # imprime no terminal as cores
 
-        # Exemplo de desenho de um pixel branco na coordenada 10, 10
-        gpu.GPU.draw_pixel([10, 10], gpu.GPU.RGB8, [255, 255, 255])  # altera pixel
+        sx, sy, sz = size
+
+        vertices = [
+            -sx / 2, -sy / 2, sz / 2,
+            sx / 2, -sy / 2, sz / 2,
+            sx / 2, sy / 2, sz / 2,
+            -sx / 2, sy / 2, sz / 2,
+            -sx / 2, -sy / 2, -sz / 2,
+            sx / 2, -sy / 2, -sz / 2,
+            sx / 2, sy / 2, -sz / 2,
+            -sx / 2, sy / 2, -sz / 2,
+        ]
+
+        triangulos = [
+            0, 1, 3, -1, 
+            1, 2, 3, -1,
+            0, 4, 1, -1,
+            4, 5, 1, -1,
+            1, 5, 2, -1,
+            5, 6, 2, -1,
+            2, 6, 3, -1,
+            6, 7, 3, -1,
+            3, 7, 0, -1,
+            7, 4, 0, -1,
+            4, 7, 5, -1,
+            7, 6, 5, -1,
+        ]
+
+        GL.indexedTriangleStripSet(vertices, triangulos, colors)
+
 
     @staticmethod
     def sphere(radius, colors):
@@ -707,6 +733,36 @@ class GL:
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
         print("Sphere : radius = {0}".format(radius)) # imprime no terminal o raio da esfera
         print("Sphere : colors = {0}".format(colors)) # imprime no terminal as cores
+
+        latitude_segments = 16  # Number of horizontal segments
+        longitude_segments = 32  # Number of vertical segments
+        vertices = []
+
+        # Generate vertices
+        for i in range(latitude_segments + 1):
+            theta = i * np.pi / latitude_segments  # angle from the top (0 to π)
+            sin_theta = np.sin(theta)
+            cos_theta = np.cos(theta)
+
+            for j in range(longitude_segments + 1):
+                phi = j * 2 * np.pi / longitude_segments  # angle around the sphere (0 to 2π)
+                x = radius * sin_theta * np.cos(phi)
+                y = radius * cos_theta
+                z = radius * sin_theta * np.sin(phi)
+                vertices.extend([x, y, z])
+
+        triangles = []
+
+        # Generate triangles
+        for i in range(latitude_segments):
+            for j in range(longitude_segments):
+                first = (i * (longitude_segments + 1)) + j
+                second = first + longitude_segments + 1
+
+                triangles.extend([first, second, first + 1, -1])
+                triangles.extend([second, second + 1, first + 1, -1])
+
+        GL.indexedTriangleStripSet(vertices, triangles, colors)
     
     @staticmethod
     def cone(bottomRadius, height, colors):
@@ -724,6 +780,44 @@ class GL:
         print("Cone : height = {0}".format(height)) # imprime no terminal a altura do cone
         print("Cone : colors = {0}".format(colors)) # imprime no terminal as cores
 
+        apex_height = height//2  # The height of the apex
+        base_height = -apex_height   # The height of the base
+
+        segments = 32  # Number of segments to approximate the circular base
+        angle_step = 2 * np.pi / segments
+
+        vertices = []
+
+        for i in range(segments):
+            angle = i * angle_step
+            x = bottomRadius * np.cos(angle)
+            z = bottomRadius * np.sin(angle)
+            vertices.extend([x, base_height, z])
+
+        apex_index = len(vertices) // 3 
+        vertices.extend([0, apex_height, 0])  
+        bottom_center_index = len(vertices)//3
+        vertices.extend([0, base_height, 0]) 
+
+        triangles = []
+
+        # Side triangles
+        for i in range(segments):
+            next_index = (i + 1) % segments
+            triangles.extend([i, next_index, apex_index, -1])
+
+        # Bottom triangles (base)
+        for i in range(segments):
+            next_index = (i + 1) % segments
+            if i % 2 == 0:
+                triangles.extend([bottom_center_index, i, next_index, -1])
+                triangles.extend([bottom_center_index, i+1, next_index+1, -1])
+            else:
+                triangles.extend([bottom_center_index, next_index, i, -1])
+                triangles.extend([bottom_center_index, next_index+1, i+1, -1])
+
+        GL.indexedTriangleStripSet(vertices, triangles, colors)
+
     @staticmethod
     def cylinder(radius, height, colors):
         """Função usada para renderizar Cilindros."""
@@ -739,6 +833,58 @@ class GL:
         print("Cylinder : radius = {0}".format(radius)) # imprime no terminal o raio do cilindro
         print("Cylinder : height = {0}".format(height)) # imprime no terminal a altura do cilindro
         print("Cylinder : colors = {0}".format(colors)) # imprime no terminal as cores
+
+        top_height = height//2
+        base_height = -top_height
+
+        segments = 32
+        angle_step = 2 * np.pi / segments
+
+        vertices = []
+
+        for i in range(segments):
+            angle = i * angle_step
+            x = radius * np.cos(angle)
+            z = radius * np.sin(angle)
+            # Bottom circle
+            vertices.extend([x, base_height, z])
+            # Top circle
+            vertices.extend([x, top_height, z])
+
+        bottom_center_index = len(vertices)//3
+        vertices.extend([0, base_height, 0])  # Center of bottom circle
+        top_center_index = len(vertices)//3
+        vertices.extend([0, top_height, 0])  # Center of top circle
+
+        triangles = []
+
+        for i in range(segments):
+            next_index = (i + 1) % segments
+            # Side triangles
+            triangles.extend([i * 2, i * 2 + 1, next_index * 2, -1])
+            triangles.extend([next_index * 2, i * 2 + 1, next_index * 2 + 1, -1])
+
+         # Bottom triangles (base)
+        for i in range(segments):
+            next_index = (i + 1) % segments
+            if i % 2 == 0:
+                triangles.extend([bottom_center_index, i, next_index, -1])
+                triangles.extend([bottom_center_index, i+1, next_index+1, -1])
+            else:
+                triangles.extend([bottom_center_index, next_index, i, -1])
+                triangles.extend([bottom_center_index, next_index+1, i+1, -1])
+
+         # top triangles (base)
+        for i in range(segments):
+            next_index = (i + 1) % segments
+            if i % 2 == 0:
+                triangles.extend([top_center_index, i, next_index, -1])
+                triangles.extend([top_center_index, i+1, next_index+1, -1])
+            else:
+                triangles.extend([top_center_index, next_index, i, -1])
+                triangles.extend([top_center_index, next_index+1, i+1, -1])        
+
+        GL.indexedTriangleStripSet(vertices, triangles, colors)
 
     @staticmethod
     def navigationInfo(headlight):
