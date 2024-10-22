@@ -42,6 +42,9 @@ class GL:
 
         GL.z_buffer = -np.inf * np.ones((GL.width*2, GL.height*2))
         GL.super_buffer = np.zeros((GL.width*2, GL.height*2, 3))
+        
+        GL.directional_light = {}
+        GL.point_light = {}
 
     @staticmethod
     def polypoint2D(point, colors):
@@ -266,9 +269,16 @@ class GL:
 
         n = len(vertices)//6
 
-        COLOR_TYPE = "emissiveColor"
+        emissive_color = colors["emissiveColor"]
+        diffuse_color = colors["diffuseColor"]
+        specular_color = colors["specularColor"]
+        shininess = colors["shininess"]
 
-        color = [int(el * 255) for el in colors[COLOR_TYPE]]
+        emissive_color = [int(el * 255) for el in emissive_color]
+        diffuse_color =  [int(el * 255) for el in diffuse_color]
+        specular_color = [int(el * 255) for el in specular_color]
+
+        color = emissive_color
 
         for num in range(n):
             ind = num * 6
@@ -898,6 +908,8 @@ class GL:
 
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
         print("NavigationInfo : headlight = {0}".format(headlight)) # imprime no terminal
+        if headlight:
+            GL.directionalLight(0.0, [1, 1, 1], 1.0, [0, 0, -1])
 
     @staticmethod
     def directionalLight(ambientIntensity, color, intensity, direction):
@@ -915,6 +927,11 @@ class GL:
         print("DirectionalLight : intensity = {0}".format(intensity)) # imprime no terminal
         print("DirectionalLight : direction = {0}".format(direction)) # imprime no terminal
 
+        GL.directional_light["ambientIntensity"] = ambientIntensity
+        GL.directional_light["color"] = color
+        GL.directional_light["intensity"] = intensity
+        GL.directional_light["direction"] = direction
+
     @staticmethod
     def pointLight(ambientIntensity, color, intensity, location):
         """Luz pontual."""
@@ -930,6 +947,11 @@ class GL:
         print("PointLight : color = {0}".format(color)) # imprime no terminal
         print("PointLight : intensity = {0}".format(intensity)) # imprime no terminal
         print("PointLight : location = {0}".format(location)) # imprime no terminal
+
+        GL.point_light["ambientIntensity"] = ambientIntensity
+        GL.point_light["color"] = color
+        GL.point_light["intensity"] = intensity
+        GL.point_light["location"] = location
 
     @staticmethod
     def fog(visibilityRange, color):
