@@ -161,7 +161,7 @@ class GL:
 
 
     @staticmethod
-    def triangleSet2D(vertices, colors, z=[1,1,1], colorPerVertex=False, textCoord=False, currentTexture=False):
+    def triangleSet2D(vertices, colors, z=[1,1,1], colorPerVertex=False, textCoord=False, currentTexture=False, normal=None):
         """Função usada para renderizar TriangleSet2D."""
         # https://www.web3d.org/specifications/X3Dv4/ISO-IEC19775-1v4-IS/Part01/components/geometry2D.html#TriangleSet2D
         # Nessa função você receberá os vertices de um triângulo no parâmetro vertices,
@@ -266,19 +266,25 @@ class GL:
                 color = mipmap_level[x][y][0:3]
                 
             return color
+        
 
         n = len(vertices)//6
 
         emissive_color = colors["emissiveColor"]
         diffuse_color = colors["diffuseColor"]
         specular_color = colors["specularColor"]
+        
         shininess = colors["shininess"]
+        view_direction = np.array([0, 0, 1])
+        material_ambient_intensity = 1
 
-        emissive_color = [int(el * 255) for el in emissive_color]
-        diffuse_color =  [int(el * 255) for el in diffuse_color]
-        specular_color = [int(el * 255) for el in specular_color]
+        emissive_color = np.array([int(el * 255) for el in emissive_color])
+        diffuse_color  = np.array([int(el * 255) for el in diffuse_color])
+        specular_color = np.array([int(el * 255) for el in specular_color])
 
         color = emissive_color
+
+        use_light = GL.point_light["intensity"] > 0 or GL.directional_light["intensity"] > 0
 
         for num in range(n):
             ind = num * 6
@@ -318,6 +324,31 @@ class GL:
 
                     if textCoord or colorPerVertex:
                         color = get_color(pixel, vertex, colorPerVertex, textCoord, color, image, mipmaps)
+
+                    elif use_light:
+
+                        diffuse_angle = max(0, np.dot(normal, -np.array(GL.directional_light['direction'])))
+
+                        diffuse = GL.directional_light['intensity'] * diffuse_angle * diffuse_color
+
+                        ambient  = GL.directional_light["ambientIntensity"] * diffuse_color * material_ambient_intensity
+                        
+                        specular_angle = -np.array(GL.directional_light['direction']) + view_direction
+
+                        specular_norm = np.linalg.norm(specular_angle)
+
+                        specular_angle = specular_angle/specular_norm if specular_norm != 0 else [0, 0, 0]
+
+                        specular_angle = max(0, np.dot(normal, specular_angle))**(128 * shininess)
+                        
+                        specular = GL.directional_light['intensity'] * specular_angle * specular_color
+
+                        color = ambient + diffuse + emissive_color + specular
+
+                        color[0] = min(255, color[0])
+                        color[1] = min(255, color[1])
+                        color[2] = min(255, color[2]) 
+
                 
                     # z-buffer and transparency
                     if z_value > GL.z_buffer[i, j]:
@@ -364,6 +395,23 @@ class GL:
         #print("TriangleSet : pontos = {0}".format(point)) # imprime no terminal pontos
         #print("TriangleSet : colors = {0}".format(colors)) # imprime no terminal as cores
 
+        def get_normal(vertex):
+            p0 = np.array(vertex[0:3])
+            p1 = np.array(vertex[3:6])
+            p2 = np.array(vertex[6:9])
+
+            v0 = p1 - p0
+            v1 = p2 - p0
+
+            n = np.cross(v0,v1)
+
+            if np.linalg.norm(n) == 0:
+                return np.array([0, 0, 0])
+            
+            n = n/np.linalg.norm(n)
+            
+            return n
+
         n = len(point)//9
 
         for num in range(n):
@@ -397,7 +445,10 @@ class GL:
 
             #z-values on camera space
             z = [camera_space_a[2], camera_space_b[2], camera_space_c[2]]
-            GL.triangleSet2D([screen_a[0][0], screen_a[1][0], screen_b[0][0], screen_b[1][0], screen_c[0][0], screen_c[1][0]], colors, z, colorPerVertex, textCoord, currentTexture)
+
+            norm = get_normal([*camera_space_a.flatten().tolist()[0:3], *camera_space_b.flatten().tolist()[0:3], *camera_space_c.flatten().tolist()[0:3]])
+
+            GL.triangleSet2D([screen_a[0][0], screen_a[1][0], screen_b[0][0], screen_b[1][0], screen_c[0][0], screen_c[1][0]], colors, z, colorPerVertex, textCoord, currentTexture, norm)
 
 
     @staticmethod
@@ -908,8 +959,12 @@ class GL:
 
         # O print abaixo é só para vocês verificarem o funcionamento, DEVE SER REMOVIDO.
         print("NavigationInfo : headlight = {0}".format(headlight)) # imprime no terminal
+
+        GL.directionalLight(0.0, [1, 1, 1], 0, [0, 0, -1])
+        GL.pointLight(0.0, [1, 1, 1], 0, [0, 0, 0])
+
         if headlight:
-            GL.directionalLight(0.0, [1, 1, 1], 1.0, [0, 0, -1])
+            GL.directionalLight(0.0, [1, 1, 1], 1, [0, 0, -1])
 
     @staticmethod
     def directionalLight(ambientIntensity, color, intensity, direction):
